@@ -56,48 +56,6 @@ function Bars({ chart }) {
   );
 }
 
-function Heatmap({ heatmap }) {
-  const max = Math.max(1, ...heatmap.matrix.flat());
-  return (
-    <figure className="heat-card">
-      <figcaption>
-        <strong>Appeal against willingness to buy at ₹60</strong>
-        <span>Rows are appeal. Columns are purchase intent. Darker means more people. n = {heatmap.n}.</span>
-      </figcaption>
-      <div className="heat" role="table" aria-label="Appeal by purchase intent">
-        <div />
-        {[1, 2, 3, 4, 5].map((score) => (
-          <div className="heat-col" key={score}>
-            {score}
-          </div>
-        ))}
-        {heatmap.matrix.map((row, rowIndex) => (
-          <div className="heat-line" key={5 - rowIndex}>
-            <div className="heat-row">{5 - rowIndex}</div>
-            {row.map((count, column) => {
-              const alpha = count === 0 ? 0 : 0.18 + (count / max) * 0.82;
-              const ink = alpha > 0.62;
-              return (
-                <div
-                  key={`${rowIndex}-${column}`}
-                  className="heat-cell"
-                  style={{
-                background: count === 0 ? "#fffdfb" : `rgba(197, 22, 34, ${alpha})`,
-                color: ink ? "#fffdfb" : "#1b1228",
-              }}
-                >
-                  {count}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-      <p className="fine">Column 1 is definitely would not buy. Column 5 is definitely would buy. Row 5 is very appealing.</p>
-    </figure>
-  );
-}
-
 export function Dashboard() {
   const [code, setCode] = useState(() => sessionStorage.getItem(CODE_KEY) || "");
   const [draft, setDraft] = useState("");
@@ -105,7 +63,6 @@ export function Dashboard() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(Boolean(code));
   const [segment, setSegment] = useState("all");
-  const [strongOnly, setStrongOnly] = useState(false);
   const [cityQuery, setCityQuery] = useState("");
   const [exporting, setExporting] = useState(false);
 
@@ -144,8 +101,8 @@ export function Dashboard() {
   }, [code]);
 
   const summary = useMemo(
-    () => (records ? summarize(records, { segment, strongOnly, cityQuery }) : null),
-    [records, segment, strongOnly, cityQuery],
+    () => (records ? summarize(records, { segment, cityQuery }) : null),
+    [records, segment, cityQuery],
   );
 
   async function unlock(event) {
@@ -291,16 +248,11 @@ export function Dashboard() {
           </em>
         </article>
         <article>
-          <span>Would buy at ₹60</span>
-          <strong>{formatPct(g.intentTop2Pct, g.completed)}</strong>
+          <span>Fair price of ₹60 or more</span>
+          <strong>{formatPct(g.fairAtLeast60Pct, g.completed)}</strong>
           <em>
-            {g.intentTop2} of {g.completed} said probably or definitely
+            {g.fairAtLeast60} of {g.completed}
           </em>
-        </article>
-        <article>
-          <span>₹60 feels fair</span>
-          <strong>{formatPct(g.priceAcceptPct, g.completed)}</strong>
-          <em>{g.priceAccept} called it cheap or fair</em>
         </article>
         <article>
           <span>Reachable contacts</span>
@@ -319,7 +271,7 @@ export function Dashboard() {
               <strong>{summary.split.buyers.n}</strong> people
             </p>
             <p>{formatPct(summary.split.buyers.appealTop2Pct, summary.split.buyers.n)} rate the concept 4 or 5</p>
-            <p>{formatPct(summary.split.buyers.intentTop2Pct, summary.split.buyers.n)} would probably or definitely buy at ₹60</p>
+            <p>{formatPct(summary.split.buyers.fairAtLeast60Pct, summary.split.buyers.n)} name a fair price of ₹60 or more</p>
           </article>
           <article>
             <h3>Does not buy them</h3>
@@ -327,10 +279,7 @@ export function Dashboard() {
               <strong>{summary.split.nonBuyers.n}</strong> people
             </p>
             <p>{formatPct(summary.split.nonBuyers.appealTop2Pct, summary.split.nonBuyers.n)} rate the concept 4 or 5</p>
-            <p>
-              {formatPct(summary.split.nonBuyers.intentTop2Pct, summary.split.nonBuyers.n)} would probably or definitely buy
-              at ₹60
-            </p>
+            <p>{formatPct(summary.split.nonBuyers.fairAtLeast60Pct, summary.split.nonBuyers.n)} name a fair price of ₹60 or more</p>
           </article>
         </div>
       </section>
@@ -347,14 +296,6 @@ export function Dashboard() {
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          className={strongOnly ? "chip on" : "chip"}
-          aria-pressed={strongOnly}
-          onClick={() => setStrongOnly((value) => !value)}
-        >
-          Strong purchase intent only
-        </button>
         <label className="city-filter">
           <span className="sr-only">Filter by city or area</span>
           <input
@@ -379,7 +320,7 @@ export function Dashboard() {
       {g.completed > 0 && summary.slice.n === 0 && (
         <section className="panel">
           <h2>Nothing in this view.</h2>
-          <p>Clear the city filter, or switch off strong purchase intent, to see the other responses.</p>
+          <p>Clear the city filter to see the other responses.</p>
         </section>
       )}
 
@@ -403,7 +344,6 @@ export function Dashboard() {
                 </article>
               ))}
             </div>
-            {block.heatmap && <Heatmap heatmap={summary.heatmap} />}
           </section>
         ))}
 
@@ -423,7 +363,6 @@ export function Dashboard() {
                   <th>Permission</th>
                   <th>City</th>
                   <th>Appeal</th>
-                  <th>At ₹60</th>
                 </tr>
               </thead>
               <tbody>
@@ -434,7 +373,6 @@ export function Dashboard() {
                     <td>{person.permission}</td>
                     <td>{person.city || "—"}</td>
                     <td>{person.appeal || "—"}</td>
-                    <td>{person.intent || "—"}</td>
                   </tr>
                 ))}
               </tbody>

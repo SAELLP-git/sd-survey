@@ -233,7 +233,7 @@ export function Survey() {
               </h1>
               <ul className="sticker-row">
                 <li>250 ml</li>
-                <li>water-based</li>
+                <li>glass bottle</li>
                 <li>5 min</li>
               </ul>
               {COPY.intro.map((paragraph) => (
