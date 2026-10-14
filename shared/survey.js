@@ -14,7 +14,7 @@ export const COPY = {
   thanksSignoff: "Thanks for being part of it.",
   brand: "Shree Aabhaan Epicurean",
   concept:
-    "Picture a chilled, low-carbonated, real Kashmiri saffron (kesar) drink: a good-mood, premium drink in a 250 ml glass bottle.",
+    "Picture a chilled, low carbonated, real Kashmiri saffron(kesar) based good mood premium drink in a 250ml glass bottle.",
   consent: "We’ll contact you only for what you chose. This is not an order.",
   minor: "Thanks! This survey is for ages 18 and over.",
 };
