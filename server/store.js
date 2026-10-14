@@ -25,8 +25,47 @@ async function writeRecords(jsonPath, records) {
   await rename(tmp, jsonPath);
 }
 
-export async function createStore(dataDir) {
+async function callSheet(url, init) {
+  const response = await fetch(url, { redirect: "follow", ...init });
+  const text = await response.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Google Sheet returned a non-JSON reply (HTTP ${response.status}). Check the web app URL and access setting.`);
+  }
+  if (data.error) throw new Error(`Google Sheet error: ${data.error}`);
+  return data;
+}
+
+function sheetBackend(sheetUrl, sheetSecret) {
+  return {
+    async list() {
+      const url = `${sheetUrl}${sheetUrl.includes("?") ? "&" : "?"}secret=${encodeURIComponent(sheetSecret)}`;
+      const data = await callSheet(url);
+      return Array.isArray(data.responses) ? data.responses : [];
+    },
+    async add(record) {
+      const saved = {
+        ...record,
+        id: `sip_${randomBytes(6).toString("hex")}`,
+        submittedAt: new Date().toISOString(),
+      };
+      const data = await callSheet(sheetUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ secret: sheetSecret, record: saved }),
+      });
+      return { record: data.record || saved, duplicate: Boolean(data.duplicate) };
+    },
+  };
+}
+
+export async function createStore(dataDir, options = {}) {
   await mkdir(dataDir, { recursive: true });
+  const sheetUrl = options.sheetUrl?.trim() || "";
+  const sheetSecret = options.sheetSecret?.trim() || "";
+  if (sheetUrl && !sheetSecret) throw new Error("SHEET_SECRET must be set when SHEET_WEBHOOK_URL is used.");
   const jsonPath = path.join(dataDir, "responses.json");
   const xlsxPath = path.join(dataDir, "Beverage-Survey-Responses.xlsx");
   const codePath = path.join(dataDir, "organizer-code.txt");
@@ -53,9 +92,21 @@ export async function createStore(dataDir) {
     return run;
   }
 
+  if (sheetUrl) {
+    const sheet = sheetBackend(sheetUrl, sheetSecret);
+    return {
+      password,
+      xlsxPath,
+      storage: "google-sheet",
+      list: () => sheet.list(),
+      add: (record) => lock(() => sheet.add(record)),
+    };
+  }
+
   return {
     password,
     xlsxPath,
+    storage: "local-file",
     list() {
       return lock(() => readRecords(jsonPath));
     },

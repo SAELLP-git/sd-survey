@@ -96,8 +96,13 @@ export function createApp(store) {
       }
       return res.status(401).json({ error: "That organiser code doesn’t match." });
     }
-    const responses = await store.list();
-    res.json({ responses });
+    try {
+      const responses = await store.list();
+      res.json({ responses });
+    } catch (error) {
+      console.error(error);
+      res.status(502).json({ error: "Responses could not be loaded from storage." });
+    }
   });
 
   app.get("/api/export", async (req, res) => {
@@ -107,11 +112,16 @@ export function createApp(store) {
       }
       return res.status(401).json({ error: "That organiser code doesn’t match." });
     }
-    const responses = await store.list();
-    const buffer = await workbookBuffer(responses);
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", 'attachment; filename="Beverage-Survey-Responses.xlsx"');
-    res.send(Buffer.from(buffer));
+    try {
+      const responses = await store.list();
+      const buffer = await workbookBuffer(responses);
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", 'attachment; filename="Beverage-Survey-Responses.xlsx"');
+      res.send(Buffer.from(buffer));
+    } catch (error) {
+      console.error(error);
+      res.status(502).json({ error: "Responses could not be loaded from storage." });
+    }
   });
 
   app.use(express.static(distDir, { index: false, maxAge: "1h" }));
@@ -133,12 +143,15 @@ const isDirect = process.argv[1] && path.resolve(process.argv[1]) === fileURLToP
 if (isDirect) {
   const dataDir = process.env.DATA_DIR || path.join(rootDir, "data");
   const port = Number(process.env.PORT || 8787);
-  const store = await createStore(dataDir);
+  const store = await createStore(dataDir, {
+    sheetUrl: process.env.SHEET_WEBHOOK_URL,
+    sheetSecret: process.env.SHEET_SECRET,
+  });
   const app = createApp(store);
   app.listen(port, "0.0.0.0", () => {
     console.log(`Survey:     http://localhost:${port}`);
     console.log(`Dashboard:  http://localhost:${port}/dashboard`);
-    console.log(`Excel file: ${store.xlsxPath}`);
+    console.log(store.storage === "google-sheet" ? "Storage:    Google Sheet" : `Excel file: ${store.xlsxPath}`);
     console.log(`Organiser code: ${store.password}`);
   });
 }
