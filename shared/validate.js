@@ -1,11 +1,10 @@
 import {
-  FOLLOWUP_IDS,
   QUESTIONS,
   SURVEY_VERSION,
+  buysPackagedDrinks,
   isHabit,
   positioningCode,
   questionById,
-  showsPurchaseFollowup,
   wantsContact,
 } from "./survey.js";
 
@@ -23,7 +22,6 @@ export function emptyRecord(partial = {}) {
     q2: "",
     q3: "",
     q4: "",
-    q5: "",
     q6: [],
     q6Other: "",
     q7: [],
@@ -37,14 +35,8 @@ export function emptyRecord(partial = {}) {
     q12: [],
     q12Other: "",
     q13: "",
-    q14: "",
     q15: "",
-    q16: "",
-    q17: "",
     q18: "",
-    q19: "",
-    q20: "",
-    q21: "",
     q22: "",
     q23: "",
     q23Code: "",
@@ -52,7 +44,6 @@ export function emptyRecord(partial = {}) {
     q24Other: "",
     q25: [],
     q25Other: "",
-    q26: "",
     q27: "",
     name: "",
     contact: "",
@@ -147,19 +138,14 @@ function applyOther(question, selected, answers, patch) {
     patch[question.other.key] = String(n);
     return { ok: true };
   }
-  const text = clean(answers[question.other.key], question.other.max || 160);
-  if (!text) return fail("Tell us a bit more about your “Other” answer.");
-  patch[question.other.key] = text;
+  patch[question.other.key] = clean(answers[question.other.key], question.other.max || 160);
   return { ok: true };
 }
 
 export function validateOne(id, answers) {
   const question = questionById(id);
   if (!question) return fail("That question is not part of this survey.");
-  if (isHabit(id) && answers?.q4 === "No") return { ok: true, patch: {} };
-  if (FOLLOWUP_IDS.includes(id) && answers?.q20 && !showsPurchaseFollowup(answers.q20)) {
-    return { ok: true, patch: {} };
-  }
+  if (isHabit(id) && !buysPackagedDrinks(answers?.q4)) return { ok: true, patch: {} };
   const result = readQuestion(question, answers || {});
   if (!result.ok) return result;
   if (id === "q27" && wantsContact(result.patch.q27)) {
@@ -186,8 +172,7 @@ export function validateAnswers(raw) {
   const record = emptyRecord({ status: "completed", ...first.patch });
   for (const question of QUESTIONS) {
     if (question.id === "q1") continue;
-    if (isHabit(question.id) && record.q4 !== "Yes") continue;
-    if (FOLLOWUP_IDS.includes(question.id) && !showsPurchaseFollowup(record.q20)) continue;
+    if (isHabit(question.id) && !buysPackagedDrinks(record.q4)) continue;
     const result = readQuestion(question, answers);
     if (!result.ok) return result;
     Object.assign(record, result.patch);
@@ -204,7 +189,7 @@ export function validateAnswers(raw) {
     record.contact = "";
   }
 
-  record.buyer = record.q4 === "Yes" ? "Yes" : "No";
+  record.buyer = buysPackagedDrinks(record.q4) ? "Yes" : "No";
   record.q23Code = positioningCode(record.q23);
   record.surveyVersion = SURVEY_VERSION;
   return { ok: true, record };

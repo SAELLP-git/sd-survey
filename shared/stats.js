@@ -1,6 +1,6 @@
-import { QUESTIONS, SURVEY_VERSION, intentScore, wantsContact } from "./survey.js";
+import { QUESTIONS, SURVEY_VERSION, buysPackagedDrinks, wantsContact } from "./survey.js";
 
-export { intentScore };
+const FAIR_AT_LEAST_60 = ["₹60–₹79", "₹80–₹99", "₹100–₹149", "₹150+"];
 
 export function pct(count, total) {
   if (!total) return 0;
@@ -24,19 +24,14 @@ function appeal(record) {
 function snapshot(records) {
   const appeals = records.map(appeal).filter((score) => score != null);
   const appealTop = top2(records, (record) => appeal(record) || 0);
-  const intentTop = top2(records, (record) => intentScore(record.q20) || 0);
-  const accepted = records.filter((record) =>
-    ["Cheap", "Fair"].includes(record.q19),
-  ).length;
+  const fair = records.filter((record) => FAIR_AT_LEAST_60.includes(record.q18)).length;
   return {
     n: records.length,
     meanAppeal: mean(appeals),
     appealTop2: appealTop,
     appealTop2Pct: pct(appealTop, records.length),
-    intentTop2: intentTop,
-    intentTop2Pct: pct(intentTop, records.length),
-    priceAccept: accepted,
-    priceAcceptPct: pct(accepted, records.length),
+    fairAtLeast60: fair,
+    fairAtLeast60Pct: pct(fair, records.length),
   };
 }
 
@@ -132,54 +127,33 @@ function appealChart(records) {
   };
 }
 
-function heatmap(records) {
-  const matrix = Array.from({ length: 5 }, () => Array(5).fill(0));
-  let n = 0;
-  for (const record of records) {
-    const appealScore = appeal(record);
-    const intent = intentScore(record.q20);
-    if (appealScore && intent) {
-      matrix[5 - appealScore][intent - 1] += 1;
-      n += 1;
-    }
-  }
-  return { n, matrix };
-}
-
 function chart(title, hint, data, extra = {}) {
   return { title, hint, ...data, ...extra };
 }
 
-export function summarize(allRecords, { segment = "all", strongOnly = false, cityQuery = "" } = {}) {
+export function summarize(allRecords, { segment = "all", cityQuery = "" } = {}) {
   const records = Array.isArray(allRecords) ? allRecords : [];
   const current = records.filter((record) => record.surveyVersion === SURVEY_VERSION);
   const legacy = records.length - current.length;
   const completed = current.filter((record) => record.status === "completed");
   const screened = current.filter((record) => record.status === "screened_out");
-  const buyers = completed.filter((record) => record.q4 === "Yes");
-  const nonBuyers = completed.filter((record) => record.q4 === "No");
+  const buyers = completed.filter((record) => buysPackagedDrinks(record.q4));
+  const nonBuyers = completed.filter((record) => record.q4 && !buysPackagedDrinks(record.q4));
 
   let slice = completed;
   if (segment === "buyers") slice = buyers;
   if (segment === "nonbuyers") slice = nonBuyers;
-  if (strongOnly) slice = slice.filter((record) => (intentScore(record.q20) || 0) >= 4);
   const query = cityQuery.trim().toLowerCase();
   if (query) slice = slice.filter((record) => String(record.q2 || "").toLowerCase().includes(query));
 
-  const habitBase = slice.filter((record) => record.q4 === "Yes");
-  const followupBase = slice.filter((record) => (intentScore(record.q20) || 0) >= 3);
+  const habitBase = slice.filter((record) => buysPackagedDrinks(record.q4));
   const blocks = [
     {
       id: "interest",
-      kicker: "Concept appeal against ₹60 purchase intent",
-      title: "Interest and willingness to buy",
-      purpose:
-        "Compare people who find the idea appealing with people who would buy at ₹60. A high appeal score can still come with a low willingness to buy.",
-      charts: [
-        chart("How appealing is the concept?", "Share selecting 4 or 5 is the appeal measure.", appealChart(slice)),
-        chart("Likelihood of buying at least one bottle within 30 days at ₹60", "Share selecting 4 or 5 is the purchase-intent measure.", singleChart(slice, "q20")),
-      ],
-      heatmap: true,
+      kicker: "Concept appeal",
+      title: "How appealing is the idea?",
+      purpose: "The appeal measure is the share who score the idea 4 or 5.",
+      charts: [chart("How appealing is the concept?", "Share selecting 4 or 5 is the appeal measure.", appealChart(slice))],
     },
     {
       id: "who",
@@ -190,7 +164,7 @@ export function summarize(allRecords, { segment = "all", strongOnly = false, cit
         chart("Age group", "", singleChart(slice, "q1")),
         chart("City and area", "Grouped by the text people typed.", { n: slice.length, rows: cityRows(slice), multi: false }),
         chart("Monthly household income", "Optional question.", singleChart(slice, "q3")),
-        chart("Buys packaged cold beverages", "", singleChart(slice, "q4")),
+        chart("How often they buy packaged cold drinks", "“I don't buy them” is the non-buyer group.", singleChart(slice, "q4")),
         chart("Familiarity with saffron", "", singleChart(slice, "q9")),
       ],
     },
@@ -203,7 +177,6 @@ export function summarize(allRecords, { segment = "all", strongOnly = false, cit
       title: "What current buyers do",
       purpose: "Asked only of people who purchase packaged cold drinks.",
       charts: [
-        chart("How often they buy", "", singleChart(habitBase, "q5")),
         chart("Drinks they buy most often", "Up to 3 answers.", multiChart(habitBase, "q6"), { footnotes: footnotes(habitBase, "q6Other") }),
         chart("Where they most often buy", "Up to 3 answers.", multiChart(habitBase, "q7"), { footnotes: footnotes(habitBase, "q7Other") }),
         chart("What matters most", "Up to 3 answers.", multiChart(habitBase, "q8"), { footnotes: footnotes(habitBase, "q8Other") }),
@@ -214,16 +187,13 @@ export function summarize(allRecords, { segment = "all", strongOnly = false, cit
   blocks.push(
     {
       id: "taste",
-      kicker: "Taste and product",
-      title: "Flavour, sweetness, feel and pack",
-      purpose: "Use these answers to brief formulation and packaging. The price test stays on the 250 ml format.",
+      kicker: "Taste and meaning",
+      title: "Taste, sweetness and what saffron means",
+      purpose: "Use these answers to brief the recipe. The drink described was a chilled, low-carbonated Kashmiri saffron drink in a 250 ml glass bottle.",
       charts: [
         chart("Preferred taste experience", "", singleChart(slice, "q13")),
-        chart("Flavour combination to try", "", singleChart(slice, "q14")),
         chart("Sweetness", "", singleChart(slice, "q15")),
-        chart("How the drink should feel", "", singleChart(slice, "q16")),
-        chart("Packaging format", "People were told to assume the same price.", singleChart(slice, "q17")),
-        chart("What they associate with saffron", "Up to 3 answers.", multiChart(slice, "q10"), { footnotes: footnotes(slice, "q10Other") }),
+        chart("What saffron means to them", "Up to 3 answers.", multiChart(slice, "q10"), { footnotes: footnotes(slice, "q10Other") }),
         chart("What they would expect from this drink", "Expectations, not verified claims. Up to 3 answers.", multiChart(slice, "q12"), {
           footnotes: footnotes(slice, "q12Other"),
         }),
@@ -231,25 +201,13 @@ export function summarize(allRecords, { segment = "all", strongOnly = false, cit
     },
     {
       id: "price",
-      kicker: "Price",
-      title: "A reasonable price, then the ₹60 test",
-      purpose: "The reasonable-price question is asked before ₹60 is revealed. Price acceptance is the share who then call ₹60 cheap or fair.",
+      kicker: "Price and repeat",
+      title: "A fair price, and how often they might buy",
+      purpose: "Fair price is for a premium 250 ml saffron drink. Repeat frequency assumes they like it. Do not turn it into a sales forecast.",
       charts: [
-        chart("Price considered reasonable for 250 ml", "", singleChart(slice, "q18")),
-        chart("Perception of ₹60, including taxes", "", singleChart(slice, "q19")),
+        chart("Fair price for a premium 250 ml saffron drink", "", singleChart(slice, "q18")),
+        chart("How often they might buy if they like it", "This assumes they enjoy the taste. It is not a sales forecast.", singleChart(slice, "q22")),
       ],
-    },
-    {
-      id: "volume",
-      kicker: "Directional demand",
-      title: "30-day quantity and repeat interest",
-      purpose: "Shown only to people who were unsure or said they would buy at ₹60.",
-      warning:
-        "Treat quantity and repeat frequency as directional indicators. Do not multiply them into a sales forecast.",
-      charts: [
-        chart("Bottles expected in the first 30 days at ₹120", "Includes the first purchase. Asked only when purchase intent was 3, 4 or 5.", singleChart(followupBase, "q21")),
-        chart("How often they might buy if they enjoy it", "This assumes they like the taste and the price. It is not a sales forecast.", singleChart(followupBase, "q22")),
-      ].filter((item) => item.n > 0),
     },
     {
       id: "position",
@@ -266,23 +224,6 @@ export function summarize(allRecords, { segment = "all", strongOnly = false, cit
     },
   );
 
-  const comments = footnotes(slice, "q26");
-  if (comments.length) {
-    blocks.push({
-      id: "comments",
-      kicker: "Open feedback",
-      title: "The one change that would make it worth buying",
-      purpose: "Optional. Each note is one person’s answer.",
-      charts: [
-        chart("Written answers", "", {
-          n: comments.length,
-          rows: comments.map((label) => ({ label, count: 1, pct: pct(1, slice.length) })),
-          multi: false,
-        }),
-      ],
-    });
-  }
-
   const contacts = slice
     .filter((record) => wantsContact(record.q27))
     .map((record) => ({
@@ -292,10 +233,8 @@ export function summarize(allRecords, { segment = "all", strongOnly = false, cit
       permission: record.q27,
       city: record.q2 || "",
       appeal: record.q11 || "",
-      intent: record.q20 || "",
-      intentScore: intentScore(record.q20),
     }))
-    .sort((a, b) => (b.intentScore || 0) - (a.intentScore || 0));
+    .sort((a, b) => (Number(b.appeal) || 0) - (Number(a.appeal) || 0));
 
   return {
     legacy,
@@ -310,9 +249,8 @@ export function summarize(allRecords, { segment = "all", strongOnly = false, cit
       reachable: completed.filter((record) => wantsContact(record.q27) && String(record.contact || "").trim()).length,
     },
     split: { buyers: snapshot(buyers), nonBuyers: snapshot(nonBuyers) },
-    slice: { segment, strongOnly, cityQuery, ...snapshot(slice) },
+    slice: { segment, cityQuery, ...snapshot(slice) },
     blocks,
-    heatmap: heatmap(slice),
     contacts,
   };
 }
