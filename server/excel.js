@@ -11,8 +11,7 @@ const COLUMNS = [
   ["q1", "Q1 Age group", 16],
   ["q2", "Q2 City and area", 28],
   ["q3", "Q3 Household income", 28],
-  ["q4", "Q4 Buys packaged cold beverages", 24],
-  ["q5", "Q5 Buying frequency", 24],
+  ["q4", "Q4 How often they buy packaged cold drinks", 36],
   ["q6", "Q6 Drinks bought most often", 42],
   ["q6Other", "Q6 Other drink", 24],
   ["q7", "Q7 Where they buy", 36],
@@ -26,22 +25,15 @@ const COLUMNS = [
   ["q12", "Q12 Expected benefits", 42],
   ["q12Other", "Q12 Other expectation", 24],
   ["q13", "Q13 Taste experience", 28],
-  ["q14", "Q14 Flavour combination", 28],
   ["q15", "Q15 Sweetness", 24],
-  ["q16", "Q16 Carbonation", 24],
-  ["q17", "Q17 Packaging", 24],
-  ["q18", "Q18 Reasonable price", 24],
-  ["q19", "Q19 Perception of ₹60", 28],
-  ["q20", "Q20 Purchase intent at ₹60", 32],
-  ["q21", "Q21 Bottles in first 30 days at ₹120", 32],
-  ["q22", "Q22 Conditional repeat frequency", 32],
+  ["q18", "Q18 Fair price for 250 ml", 28],
+  ["q22", "Q22 Repeat frequency if they like it", 32],
   ["q23", "Q23 Positioning", 28],
   ["q23Code", "Q23 Positioning code", 16],
   ["q24", "Q24 Switch motivation", 42],
   ["q24Other", "Q24 Other motivation", 24],
   ["q25", "Q25 Purchase barriers", 42],
   ["q25Other", "Q25 Other barrier", 24],
-  ["q26", "Q26 One improvement", 42],
   ["q27", "Q27 Contact permission", 40],
   ["name", "Name", 22],
   ["contact", "Phone or email", 28],
@@ -71,7 +63,7 @@ function buildWorkbook(records) {
   const stats = summarize(records);
   const lines = [
     ["Shree Aabhaan Epicurean — saffron beverage survey"],
-    ["₹60 is the test price for the 250 ml concept. It is not a pricing recommendation."],
+    ["Fair price is what people say a premium 250 ml saffron drink should cost. It is not a pricing recommendation."],
     [""],
     ["Completed responses", stats.global.completed],
     ["Screened out (under 18)", stats.global.screened],
@@ -79,16 +71,13 @@ function buildWorkbook(records) {
     ["Do not buy packaged cold drinks", stats.global.nonBuyers],
     ["Concept appeal 4 or 5", stats.global.appealTop2],
     ["Share with concept appeal 4 or 5", stats.global.appealTop2Pct],
-    ["Would probably or definitely buy at ₹60", stats.global.intentTop2],
-    ["Share who would probably or definitely buy at ₹60", stats.global.intentTop2Pct],
-    ["Call ₹60 cheap or fair", stats.global.priceAccept],
-    ["Share who call ₹60 cheap or fair", stats.global.priceAcceptPct],
+    ["Fair price of ₹60 or more", stats.global.fairAtLeast60],
+    ["Share with a fair price of ₹60 or more", stats.global.fairAtLeast60Pct],
     ["Agreed to be contacted", stats.global.contactYes],
     ["Left a phone number or email", stats.global.reachable],
     [""],
-    ["Q21 and Q22 are directional. Do not turn them into a sales forecast."],
-    ["People who do not buy packaged cold drinks skipped Q5–Q8."],
-    ["People who would not buy at ₹60 skipped Q21 and Q22."],
+    ["Repeat frequency assumes they like the drink. Do not turn it into a sales forecast."],
+    ["People who do not buy packaged cold drinks skipped the current-drink questions."],
     ["Contact details are permission-based. Use them only for the purpose the person selected."],
   ];
   lines.forEach((line, index) => {
@@ -129,7 +118,7 @@ function buildWorkbook(records) {
   data.views = [{ state: "frozen", ySplit: 1 }];
 
   const contactsSheet = workbook.addWorksheet("Tasting contacts");
-  contactsSheet.addRow(["Name", "Phone or email", "Permission", "City and area", "Appeal (1–5)", "Likelihood at ₹60", "Submitted at"]);
+  contactsSheet.addRow(["Name", "Phone or email", "Permission", "City and area", "Appeal (1–5)", "Submitted at"]);
   const contactHeader = contactsSheet.getRow(1);
   contactHeader.font = { bold: true, color: { argb: "FFFFD84A" } };
   contactHeader.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1B1228" } };
@@ -141,12 +130,11 @@ function buildWorkbook(records) {
       excelSafe(record.q27),
       excelSafe(record.q2),
       typeof record.q11 === "number" ? record.q11 : "",
-      excelSafe(record.q20),
       record.submittedAt ? new Date(record.submittedAt) : "",
     ]);
-    if (row.getCell(7).value instanceof Date) row.getCell(7).numFmt = "yyyy-mm-dd hh:mm";
+    if (row.getCell(6).value instanceof Date) row.getCell(6).numFmt = "yyyy-mm-dd hh:mm";
   }
-  [22, 28, 42, 28, 16, 32, 22].forEach((width, index) => {
+  [22, 28, 42, 28, 16, 22].forEach((width, index) => {
     contactsSheet.getColumn(index + 1).width = width;
   });
   contactsSheet.views = [{ state: "frozen", ySplit: 1 }];
