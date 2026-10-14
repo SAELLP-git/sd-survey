@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { COPY, QUESTIONS, buildPath, preambleText, pruneAnswers, questionById, wantsContact } from "@shared/survey.js";
 import { validateOne } from "@shared/validate.js";
 import { Bottle } from "./Bottle.jsx";
+import { playBottleSound, playChoiceSound } from "./surveySounds.js";
 
 function emptyAnswers() {
   const answers = { name: "", contact: "" };
@@ -25,6 +26,7 @@ export function Survey() {
   const [honeypot, setHoneypot] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [startedAt, setStartedAt] = useState("");
+  const [soundOn, setSoundOn] = useState(() => localStorage.getItem("sipcheck-sound") !== "off");
   const [positionOrder] = useState(() => {
     const options = questionById("q23").options.slice(0, -1);
     const copy = [...options];
@@ -58,6 +60,7 @@ export function Survey() {
   }
 
   function pickSingle(q, option) {
+    if (soundOn && answers[q.id] !== option) playChoiceSound();
     update((current) => {
       const next = { ...current, [q.id]: option };
       if (q.other && option !== q.other.option) next[q.other.key] = "";
@@ -85,6 +88,7 @@ export function Survey() {
       }
       nextValues = [...withoutExclusive, option];
     }
+    if (soundOn) playChoiceSound();
     update((currentAnswers) => {
       const next = { ...currentAnswers, [q.id]: nextValues };
       if (q.other && !nextValues.includes(q.other.option)) next[q.other.key] = "";
@@ -108,6 +112,7 @@ export function Survey() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "The response could not be saved.");
+      if (soundOn) playBottleSound();
       setStage(snapshot.q1 === "Under 18" ? "minor" : "thanks");
     } catch (caught) {
       setError(caught.message || "The response could not be saved. Check your connection and try again.");
@@ -118,6 +123,7 @@ export function Survey() {
 
   function goNext() {
     if (stage === "intro") {
+      if (soundOn) playBottleSound();
       setStartedAt(new Date().toISOString());
       setStage("question");
       setIndex(0);
@@ -139,6 +145,7 @@ export function Survey() {
       void save();
       return;
     }
+    if (soundOn) playBottleSound();
     setIndex(position + 1);
     setError("");
   }
@@ -164,7 +171,20 @@ export function Survey() {
       void save(nextAnswers);
       return;
     }
+    if (soundOn) playBottleSound();
     setIndex(position + 1);
+  }
+
+  function pickScale(id, score) {
+    if (soundOn && answers[id] !== score) playChoiceSound();
+    update((current) => ({ ...current, [id]: score }));
+  }
+
+  function toggleSound() {
+    const next = !soundOn;
+    setSoundOn(next);
+    localStorage.setItem("sipcheck-sound", next ? "on" : "off");
+    if (next) playChoiceSound();
   }
 
   function restart() {
@@ -187,6 +207,16 @@ export function Survey() {
 
   return (
     <div className="app survey">
+      <button
+        className="sound-toggle"
+        type="button"
+        aria-pressed={soundOn}
+        aria-label={soundOn ? "Mute survey sounds" : "Turn on survey sounds"}
+        onClick={toggleSound}
+      >
+        <span aria-hidden="true">{soundOn ? "♪" : "♪̸"}</span>
+        {soundOn ? "Sound on" : "Sound off"}
+      </button>
       <div className="float-sticker sticker-a" aria-hidden="true">
         kesar
       </div>
@@ -372,7 +402,7 @@ export function Survey() {
                           aria-checked={on}
                           aria-label={label}
                           className={on ? "scale-btn on" : "scale-btn"}
-                          onClick={() => update((current) => ({ ...current, [question.id]: score }))}
+                          onClick={() => pickScale(question.id, score)}
                         >
                           {score}
                         </button>
